@@ -1,0 +1,138 @@
+Include "mapbasic.def"
+
+Declare Sub Main
+Declare Sub PolyPlotStart
+Declare Sub PolyPlotExit
+Declare Sub PolyPlotFindFile
+
+
+Sub Main
+    Create Menu "SubMenu_PolyPlot" As
+        "Open" Calling PolyPlotStart,
+        "(-",
+        "Exit" Calling PolyPlotExit
+
+    Alter Menu "Programs" Add "Polygons Plot" As "SubMenu_PolyPlot"
+End Sub
+
+Sub PolyPlotStart
+    Print Chr$(12)
+
+    ' Declare vars
+    Dim vXlsFile, vTabFileTmp, vTabFileRes, vTmpTab, vResTab            as String
+    Dim vObj                                                            as Object
+    Dim vAlX, vAlY, vPnt                                                as Alias
+    Dim X, Y                                                            as Float
+    Dim Pnt, RowCnt                                                     as Integer
+
+    ' Set coordinate system
+    Set CoordSys
+        NonEarth
+        Units "m"
+        Bounds (-80000, -80000) (80000, 80000)	
+    
+    ' Input dialog
+    Dialog
+        Title "Input parameters"
+        Control StaticText
+            Title "File (XLS):"
+            Position 5, 7
+        Control EditText
+            Position 50, 5
+            Width 200
+            ID 1
+            Into vXlsFile
+        Control Button
+            Title "Browse"
+            Calling PolyPlotFindFile
+            Position 255, 5
+        Control StaticText
+            Title "Field format XLS: № Point | X | Y"
+            Position 5, 25
+        Control OKButton
+        Control CancelButton
+
+    If Not CommandInfo(CMD_INFO_DLG_OK) Then
+        Exit Sub
+    End If
+
+    vXlsFile = RTrim$(LTrim$(vXlsFile))
+    If vXlsFile = "" Then
+        Note "No file specified!"
+        Exit Sub
+    End If
+
+    ' Register XLS file into temporary table
+    vTabFileTmp = Left$(vXlsFile, InStr(1, vXlsFile, ".") - 1) + "_tmp.tab"
+    vTabFileRes = Left$(vXlsFile, InStr(1, vXlsFile, ".") - 1) + ".tab"
+    Run Command "Register Table """ + vXlsFile + """ Type XLS Titles Into """ + vTabFileTmp + """"
+
+    ' Result table with graphical objects
+    Create Table res_tbl(name char(50)) File vTabFileRes
+    Close Table res_tbl
+    
+    ' Open result table for write
+    Open Table vTabFileRes
+    vResTab = TableInfo(0, TAB_INFO_NAME)
+    Create Map For vResTab CoordSys NonEarth Units "m" Bounds (-80000, -80000) (80000, 80000)
+    
+    ' Read temporary table
+    Open Table vTabFileTmp
+    vTmpTab = TableInfo(0, TAB_INFO_NAME)	
+    
+    Fetch First From vTmpTab
+    Fetch Next From vTmpTab	    ' Skip header
+    
+    RowCnt = 0
+    Do While Not EOT(vTmpTab)
+        RowCnt = RowCnt + 1
+    
+        vPnt = vTmpTab + ".col1"
+        Pnt = Val(vPnt)
+        
+        If (Pnt = 1) Then
+            If (RowCnt <> 1) Then
+                ' Save temp graphical object to result table
+                vObj = ConvertToRegion(vObj)
+                Insert Into vResTab(obj, name) Values(vObj, TableInfo(vResTab, TAB_INFO_NAME))				
+            End If
+            
+            ' Create graphical object
+            Create Pline Into Variable vObj 0
+        End If
+    
+        vAlX = vTmpTab + ".col2"
+        vAlY = vTmpTab + ".col3"
+
+        X = Val(vAlX)
+        Y = Val(vAlY)
+        
+        If  Not ((X = 0) And (Y = 0)) Then
+            Alter Object vObj Node Add (X, Y)
+        End If
+        
+        Fetch Next From vTmpTab
+    Loop
+    Close Table vTmpTab
+    
+    ' Save final graphical object to result table
+    vObj = ConvertToRegion(vObj)
+    Insert Into vResTab(obj, name) Values(vObj, TableInfo(vResTab, TAB_INFO_NAME))	
+    
+    Commit Table vResTab
+    Map From vResTab
+End Sub	
+
+
+Sub PolyPlotFindFile
+    Dim strFile as String
+    
+    strFile = FileOpenDlg("", "", "XLS", "Open file")
+    
+    Alter Control 1 Value strFile
+End Sub
+
+
+Sub PolyPlotExit
+    End Program
+End Sub

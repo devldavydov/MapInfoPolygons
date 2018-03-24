@@ -1,0 +1,65 @@
+Include "mapbasic.def"
+
+Declare Sub Main
+Declare Sub MergeTabStart
+Declare Sub MergeTabExit
+
+
+Sub Main
+    Create Menu "SubMenu_MergeTab" As
+        "Start" Calling MergeTabStart,
+        "(-",
+        "Exit" Calling MergeTabExit
+
+    Alter Menu "Programs" Add "Merge Tables" As "SubMenu_MergeTab"
+End Sub
+
+Sub MergeTabStart
+    Print Chr$(12)
+
+    Dim i, tblCnt                               as Integer
+    Dim tabResult, tabResultPath, tmpTab        as String
+    Dim vObj                                    as Object
+    Dim vAl                                     as Alias
+
+    ' Get open tables count
+    tblCnt = NumTables()
+    If tblCnt = 0 Then
+        Note "No opened tables!"
+        Exit Sub
+    End If
+
+    ' Common tab-files folder
+    tabResultPath = PathToDirectory$(TableInfo(1, TAB_INFO_TABFILE)) + "Result.tab"
+
+    ' Create result table
+    Create Table ResultTable(name char(1)) File tabResultPath
+    Create Map For ResultTable CoordSys NonEarth Units "m" Bounds (-80000, -80000) (80000, 80000)
+
+    ' Put all geo objects from opened tables to result table
+    For i = 1 To tblCnt		
+        tmpTab = TableInfo(i, TAB_INFO_NAME)
+        
+        Fetch First From tmpTab
+        Do While Not EOT(tmpTab)
+            vAl = tmpTab + ".obj"       ' Create column Alias
+            vObj = vAl                  ' Get column value
+
+            If vAL Then	' If Alias not empty, insert object
+                Insert Into ResultTable(obj) Values(vObj)
+            End If
+            Fetch Next From tmpTab
+        Loop
+    Next
+
+    Commit Table ResultTable
+
+    ' Open map for result table
+    Map From ResultTable
+    
+    Note "Result table saved in " + tabResultPath
+End Sub
+
+Sub MergeTabExit
+    End Program
+End Sub

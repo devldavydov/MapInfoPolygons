@@ -1,0 +1,130 @@
+Include "mapbasic.def"
+
+Declare Sub Main
+Declare Sub PolyCoordStart
+Declare Sub PolyCoordExit
+
+
+Sub Main
+    Create Menu "SubMenu_PolyCoord" As
+        "Open" Calling PolyCoordStart,
+        "(-",
+        "Exit" Calling PolyCoordExit
+
+    Alter Menu "Programs" Add "Polygons Coordinates" As "SubMenu_PolyCoord"
+End Sub
+
+Sub PolyCoordStart
+    Print Chr$(12)
+
+    ' Declare vars
+    Dim vRegionName, vFile, vTable, TableName   as String
+    Dim i, j, TableNum                          as Integer
+    Dim vNodeX, vNodeY                          as Float
+    Dim vObj                                    as Object
+    Dim vAl                                     as Alias
+
+    ' Set coordinate system
+    Set CoordSys
+        NonEarth
+        Units "m"
+        Bounds (-80000, -80000) (80000, 80000)
+
+    ' Get open tables
+    i = NumTables()
+    Dim TableArray(1) as String
+    ReDim TableArray(i)
+    For j = 1 to i
+        TableArray(j) = Tableinfo(j, TAB_INFO_NAME)
+    Next
+
+    ' Create input dialog
+    Dialog
+        Title "Input parameters"
+        Control StaticText
+            Title "Table name"
+            Position 5, 5
+        Control PopupMenu
+            Title From Variable TableArray
+            Into TableNum
+            Position 120, 5
+        Control StaticText
+            Title "File name (no ext.)"
+            Position 5, 30
+        Control EditText
+            Into vFile 
+            Position 120, 30
+        Control OKButton
+        Control CancelButton
+
+    If Not CommandInfo(CMD_INFO_DLG_OK) Then
+        Exit Sub
+    End If
+
+    vFile = RTrim$(LTrim$(vFile))
+
+    If NumTables() = 0 or vFile = "" Then
+        Note "All parameters must be present!"
+        Exit Sub
+    End If
+
+    vTable = TableArray(TableNum)
+
+    ' Result file
+    vFile = PathToDirectory$(TableInfo(vTable, TAB_INFO_TABFILE)) + vFile + ".csv"
+    Open File vFile
+        For Output As #1
+        CharSet "WindowsCyrillic"
+
+    ' Read regions from table
+    Fetch First From vTable
+
+    Print #1,"Region;Polygon#;Point#;X;Y"
+
+    Do While Not EOT(vTable)
+        vAl = vTable + ".obj"
+        vObj = vAl
+
+        vAl = vTable + ".col1"
+        vRegionName = vAl
+
+        ' Loop for all polygons in region
+        i = 1
+        Do While i <= ObjectInfo(vObj, OBJ_INFO_NPOLYGONS)
+            ' Loop for all nodes in polygon
+            j = 1
+            Do While j <= ObjectInfo(vObj, OBJ_INFO_NPOLYGONS + i) - 1 ' the last point coincides with the first
+                vNodeX = ObjectNodeX(vObj , i, j)
+                vNodeY = ObjectNodeY(vObj , i, j)
+            
+                If (i = 1 And j = 1) Then
+                    print #1, vRegionName + ";" + i + ";" + j + ";" + Format$(vNodeX, "0.00000") + ";" + Format$(vNodeY, "0.00000")
+                ElseIf j = 1 Then
+                    print #1,"" + ";" + i + ";" + j + ";" + Format$(vNodeX, "0.00000") + ";" + Format$(vNodeY, "0.00000")
+                Else
+                    print #1,"" + ";" + "" + ";" + j + ";" + Format$(vNodeX, "0.00000") + ";" + Format$(vNodeY, "0.00000")
+                End If
+                
+                ' Next node
+                j = j + 1
+            Loop
+                
+            ' Next polygon
+            i = i + 1
+        Loop
+        
+        ' Next region
+        Fetch Next From vTable
+    Loop
+
+    ' Close file
+    Close File #1 
+
+    ' Log
+    Note "Coordinates saved in '" + vFile + "'"
+End Sub	
+
+
+Sub PolyCoordExit
+    End Program
+End Sub
